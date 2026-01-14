@@ -6,14 +6,11 @@ import tempfile
 from collections import Counter
 from ultralytics import YOLO
 
-# Use system temp directory to avoid triggering file watchers (reloads)
 TEMP_DIR = os.path.join(tempfile.gettempdir(), "crack_detection_media")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# Load standard model (optional usage)
 print("Loading Crack Detection Model...")
 try:
-    # Try loading the specialized model
     model_path = os.path.join(os.path.dirname(__file__), "crack.pt")
     if os.path.exists(model_path):
         detection_model = YOLO(model_path)
@@ -69,14 +66,12 @@ def detect_corrosion(img, mask_output):
     """
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
-    # Rust colors (Oranges/Browns)
-    # Lower bound (approx hue 10-25)
+   
     lower_rust = np.array([10, 100, 20])
     upper_rust = np.array([25, 255, 255])
     
     mask = cv2.inRange(hsv, lower_rust, upper_rust)
     
-    # Clean up mask
     kernel = np.ones((5,5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
@@ -89,16 +84,14 @@ def detect_corrosion(img, mask_output):
     
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area > 500: # Minimum substantial area
+        if area > 500: 
             x, y, w, h = cv2.boundingRect(cnt)
             
-            # Add to main mask for visualization
             cv2.rectangle(mask_output, (x, y), (x+w, y+h), (0, 165, 255), 2)
             cv2.putText(mask_output, "Corrosion", (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
             
-            # Metadata
             area_ratio = (area / total_area) * 100
-            conf = 0.80 + min((area/5000) * 0.1, 0.15) # Heuristic confidence
+            conf = 0.80 + min((area/5000) * 0.1, 0.15) 
             
             risk, action = analyze_risk("Corrosion", area_ratio, conf)
             
@@ -117,13 +110,11 @@ def detect_material(img):
     """
     Estimate material (Concrete vs Asphalt/Pavement) based on color statistics.
     """
-    # Convert to Lab for better color analysis
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
     l, a, b = cv2.split(lab)
     
     avg_l = np.mean(l)
     
-    # Asphalt is usually darker (low L), Concrete lighter (high L)
     if avg_l < 80:
         return "Asphalt/Pavement"
     else:
@@ -136,33 +127,26 @@ def generate_heatmap(img, detections):
     height, width = img.shape[:2]
     heatmap_mask = np.zeros((height, width), dtype=np.float32)
     
-    # Create Gaussian splats for each defect
     for d in detections:
         x1, y1, x2, y2 = d['box']
         cx = int((x1 + x2) / 2)
         cy = int((y1 + y2) / 2)
         
-        # Weighted by severity/confidence
         weight = 1.0
         if d['risk_level'] == 'High': weight = 3.0
         elif d['risk_level'] == 'Medium': weight = 2.0
         
-        # Draw a filled circle on the mask (approximate gaussian splat)
         radius = int(max(x2-x1, y2-y1) * 1.5)
         cv2.circle(heatmap_mask, (cx, cy), radius, (weight), -1)
         
-    # Blur to create smooth heatmap
     heatmap_mask = cv2.GaussianBlur(heatmap_mask, (121, 121), 0)
     
-    # Normalize to 0-255
     if np.max(heatmap_mask) > 0:
         heatmap_mask = (heatmap_mask / np.max(heatmap_mask)) * 255
     
     heatmap_mask = np.uint8(heatmap_mask)
-    # Use INFERNO for a better "heat" look (Black -> Purple -> Orange -> Yellow)
     heatmap_color = cv2.applyColorMap(heatmap_mask, cv2.COLORMAP_INFERNO)
     
-    # Overlay on original image (Brighten the result slightly)
     overlay = cv2.addWeighted(img, 0.7, heatmap_color, 0.5, 0)
     return overlay
 
@@ -182,27 +166,21 @@ def detect_cracks(img, mask_output):
     for r in results:
         boxes = r.boxes
         for box in boxes:
-            # Bounding Box
             x1, y1, x2, y2 = box.xyxy[0].tolist()
             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
             
-            # Confidence
             conf = float(box.conf[0])
             
-            # Filter low confidence
             if conf < 0.25: continue
 
-            # Class (0 is usually the main class for single-class models)
             cls = int(box.cls[0])
-            label = "Crack" # Default to crack
+            label = "Crack" 
             
-            # Calculate Area
             w_box = x2 - x1
             h_box = y2 - y1
             area = w_box * h_box
             area_ratio = (area / total_area) * 100
 
-            # Draw Box
             cv2.rectangle(mask_output, (x1, y1), (x2, y2), (0, 0, 255), 2)
             cv2.putText(mask_output, f"{label} {conf:.2f}", (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
             
@@ -220,30 +198,23 @@ def detect_cracks(img, mask_output):
     return detections
 
 def process_image(file_bytes: bytes, filename: str):
-    # 1. Decode Image
     nparr = np.frombuffer(file_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
     if img is None:
         raise ValueError("Could not decode image")
 
-    # Output image (copy for drawing)
     output_img = img.copy()
     
-    # 2. Extract Metadata
     material = detect_material(img)
     
-    # 3. Run Detectors
     corrosion_results = detect_corrosion(img, output_img)
     crack_results = detect_cracks(img, output_img)
     
-    # 4. Aggregate Results
     all_detections = corrosion_results + crack_results
     
-    # 5. Generate Heatmap
     heatmap_img = generate_heatmap(img, all_detections)
     
-    # 6. Save Result and Heatmap
     base_id = uuid.uuid4().hex[:8]
     output_filename = f"processed_{base_id}_{filename}"
     heatmap_filename = f"heatmap_{base_id}_{filename}"
@@ -254,7 +225,6 @@ def process_image(file_bytes: bytes, filename: str):
     cv2.imwrite(output_path, output_img)
     cv2.imwrite(heatmap_path, heatmap_img)
     
-    # 7. Determine Global Severity
     max_severity = "minor"
     risks = [d['risk_level'] for d in all_detections]
     if "High" in risks:
@@ -267,7 +237,6 @@ def process_image(file_bytes: bytes, filename: str):
     return output_path, heatmap_path, all_detections, max_severity, material
 
 def process_video(file_bytes: bytes, filename: str):
-    # 1. Save input video to temp file
     base_id = uuid.uuid4().hex[:8]
     input_filename = f"input_{base_id}_{filename}"
     output_filename = f"processed_{base_id}_{filename}"
@@ -278,19 +247,16 @@ def process_video(file_bytes: bytes, filename: str):
     with open(input_path, "wb") as f:
         f.write(file_bytes)
         
-    # 2. Open Video
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         raise ValueError("Could not open video file")
         
-    # Get video properties
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
-    # 3. Setup Video Writer (MP4 format - H.264)
-    # macOS/Chrome prefers 'avc1'. If that fails, 'mp4v' is a fallback but less compatible.
+    
     try:
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
     except:
@@ -301,8 +267,7 @@ def process_video(file_bytes: bytes, filename: str):
     all_detections = []
     frames_processed = 0
     
-    # Optimization: Process every Nth frame to speed up CPU inference
-    SKIP_FRAMES = 4 # Process 1, skip 4 = 1/5th of frames. ~6fps analysis.
+    SKIP_FRAMES = 4
     current_detections_c = []
     current_detections_k = []
     
@@ -315,23 +280,18 @@ def process_video(file_bytes: bytes, filename: str):
             
         output_frame = frame.copy()
         
-        # Only run detection if it's the right frame
         if frames_processed % (SKIP_FRAMES + 1) == 0:
             current_detections_c = detect_corrosion(frame, output_frame) # This draws on output_frame
             current_detections_k = detect_cracks(frame, output_frame)    # This draws on output_frame (redrawing over same frame)
             
-            # Store these for the aggregated report
             all_detections.extend(current_detections_c)
             all_detections.extend(current_detections_k)
         else:
-            # For skipped frames, draw the *last known* detections to maintain specific visuals?
-            # The functions detect_corrosion/cracks return list of dicts: {'box': [x1,y1,x2,y2], 'label':...}
-            # We can manually draw the boxes from 'current_detections_...' onto 'output_frame'
+           
             for d in current_detections_c + current_detections_k:
                 x1, y1, x2, y2 = d['box']
                 color = (0, 0, 255) if d['type'] == 'Crack' else (0, 165, 255) # Red or Orange
                 cv2.rectangle(output_frame, (x1, y1), (x2, y2), color, 2)
-                # cv2.putText(output_frame, d['type'], (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
         out.write(output_frame)
         frames_processed += 1
@@ -342,13 +302,11 @@ def process_video(file_bytes: bytes, filename: str):
     cap.release()
     out.release()
     
-    # Cleaning up input file
     try:
         os.remove(input_path)
     except:
         pass
 
-    # 4. Determine Max Severity
     max_severity = "minor"
     risks = [d['risk_level'] for d in all_detections]
     if "High" in risks:
@@ -358,14 +316,11 @@ def process_video(file_bytes: bytes, filename: str):
     elif not all_detections:
         max_severity = "none"
 
-    # Optimization: If too many detections, sample them for the UI list to prevent browser crash
     if len(all_detections) > 100:
-        # Sort by confidence/risk? Or just take every Nth one
-        # Let's prioritize High risk
+       
         high_risk = [d for d in all_detections if d['risk_level'] == 'High']
         other_risk = [d for d in all_detections if d['risk_level'] != 'High']
         
-        # Take all high risk + sample of others
         all_detections = high_risk + other_risk[:50]
         
     return output_path, all_detections, max_severity
