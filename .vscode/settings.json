@@ -1,0 +1,8 @@
+{
+    "liveServer.settings.ignoreFiles": [
+        "processed_media/**",
+        "**/*.jpg",
+        "**/*.png",
+        "**/*.mp4"
+    ]
+}
