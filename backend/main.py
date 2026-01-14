@@ -10,16 +10,14 @@ from schemas import AnalysisResponse, HistoryItem
 
 app = FastAPI(title="Inframind API")
 
-# In main.py
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Must be * to allow local file opening
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mount static files to serve processed images/videos
 app.mount("/media", StaticFiles(directory=model.TEMP_DIR), name="media")
 
 @app.post("/analyze", response_model=AnalysisResponse)
@@ -37,7 +35,6 @@ async def analyze_file(
         if file.content_type.startswith("image"):
             result_path, heatmap_path, detections, severity, material = model.process_image(file_bytes, file.filename)
         elif file.content_type.startswith("video"):
-            # Video support pending update
             result_path, detections, severity = model.process_video(file_bytes, file.filename)
             heatmap_path = ""
             material = "Unknown"
@@ -46,7 +43,6 @@ async def analyze_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Calculate Stats
     count = len(detections)
     if count > 0:
         avg_conf = sum(d['confidence'] for d in detections) / count
@@ -60,8 +56,7 @@ async def analyze_file(
         "Low": len([d for d in detections if d.get('risk_level') == 'Low']),
     }
 
-    # Save to DB (Simplified, might need DB schema update in real app, but using same table for now)
-    # Note: We are re-using 'crack_count' for total defects
+   
     db_record = database.AnalysisResult(
         filename=file.filename,
         file_type="image" if file.content_type.startswith("image") else "video",
@@ -74,8 +69,7 @@ async def analyze_file(
     db.commit()
     db.refresh(db_record)
     
-    # Construct Response
-    # Add IDs to details
+   
     formatted_details = []
     for i, d in enumerate(detections):
         formatted_details.append({
