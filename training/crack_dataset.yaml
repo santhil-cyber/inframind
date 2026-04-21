@@ -1,0 +1,20 @@
+# YOLOv8 format dataset for Crack Detection
+# Download your dataset (e.g., from Roboflow or Kaggle) and structure it as below.
+
+# The dataset root path. It must be accessible by the training script.
+# Use an absolute path or relative to the training script.
+path: ./datasets/crack_data 
+
+# Subdirectories for training, validation, and testing images.
+train: images/train  
+val: images/val      
+test: images/test    # test images (optional)
+
+# Defect Classes
+names:
+  0: Crack
+
+# NOTE ON ANNOTATIONS:
+# YOLOv8 expects a .txt file for every corresponding image.
+# If you have an image `crack1.jpg`, you must have a `crack1.txt` in the labels directory.
+# The .txt file should contain format: `<class-id> <x_center> <y_center> <width> <height>` (normalized 0.0-1.0)

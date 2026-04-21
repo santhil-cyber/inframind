@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+.venv/
+env/
+
+# Mac
+.DS_Store
+
+# YOLO / ML
+runs/
+*.pt
+!backend/crack.pt # Keep our custom model
+backend/yolov8x.pt # Explicitly ignore the large base model
+backend/processed_media/
+processed_media/
+
+# Database
+*.db
+backend/media/

@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+python-multipart
+python-jose
+passlib
+sqlalchemy
+ultralytics
+opencv-python-headless
+pillow
+numpy
+aiofiles
