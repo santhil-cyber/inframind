@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: inframind-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
